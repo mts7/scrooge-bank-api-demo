@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scrooge-bank-api"
+version = "1.0.0"
+authors = [
+  { name="Mike Rodarte", email="github@mts7.com" },
+]
+description = "API endpoints for a fictitious bank"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "flask",
+    "requests",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,591 @@
+openapi: 3.0.3
+info:
+  title: Scrooge Bank API
+  description: An API for bank operators to check cash on hand and for
+    authenticated users to open, close, and deposit into new accounts, and to
+    apply for and pay loans.
+  version: 1.0.0
+servers:
+  - url: https://localhost:5000/v1
+paths:
+  /bank/details:
+    get:
+      summary: Get current bank details
+      description: >
+        Retrieves the total amount of physical currency available at the bank.
+        This endpoint is restricted to bank operators and requires a valid API key.
+      security:
+        - ApiKeyAuth: []
+      tags:
+        - Operator
+      responses:
+        "200":
+          description: Successful response with the current bank details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankStatus"
+        "401":
+          description: Unauthorized - API key is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the API key does not have the required permissions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /accounts:
+    post:
+      summary: Create a new bank account
+      description: >
+        Allows an authenticated user to open a new bank account. 
+        Each user is limited to one active account at any time.
+        Attempting to open a second account will return a 409 Conflict.
+        This constraint is enforced server-side based on the authenticated user's identity.
+      tags:
+        - Accounts
+      security:
+        - UserAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewAccountRequest"
+      responses:
+        "201":
+          description: A new account was created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+        "400":
+          description: Invalid request data provided.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - authentication token is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Conflict - The user already has an active account. A user may only
+            have one active account at a time.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  "/accounts/{accountId}":
+    get:
+      summary: Get account details
+      description: >
+        Retrieves the details for a specific bank account, including the current balance.
+        The authenticated user must have permission to access the account.
+      tags:
+        - Accounts
+      security:
+        - UserAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: The unique identifier for the account to retrieve.
+          schema:
+            type: string
+            example: a1b2c3d4-e5f6-7890-1234-567890abcdef
+      responses:
+        "200":
+          description: Successful response with the account details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+        "401":
+          description: Unauthorized - authentication token is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the authenticated user does not have permission for
+            this account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Account not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  "/accounts/{accountId}/close":
+    post:
+      summary: Close a bank account
+      description: >
+        Allows an authenticated user to close one of their bank accounts.
+        The user must specify how to handle the remaining balance.
+      tags:
+        - Accounts
+      security:
+        - UserAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: The unique identifier for the account to close.
+          schema:
+            type: string
+            example: a1b2c3d4-e5f6-7890-1234-567890abcdef
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CloseAccountRequest"
+      responses:
+        "200":
+          description: Account closed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CloseAccountResponse"
+        "400":
+          description: Invalid request data or remaining balance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - authentication token is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the authenticated user does not own this account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Account not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  "/accounts/{accountId}/deposit":
+    post:
+      summary: Make a deposit into an account
+      description: >
+        Allows an authenticated user to deposit money into the user's open account.
+        The accountId must match the authenticated user's own account. 
+        Attempting to deposit into or withdraw from another user's account will result in a 403 Forbidden error.
+      tags:
+        - Accounts
+      security:
+        - UserAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: The unique identifier for the account to deposit into.
+          schema:
+            type: string
+            example: a1b2c3d4-e5f6-7890-1234-567890abcdef
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DepositRequest"
+      responses:
+        "200":
+          description: Deposit was successful. Returns the updated account details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+        "400":
+          description: Invalid deposit amount or request data.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - authentication token is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the authenticated user does not have permission for
+            this account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Account not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  "/accounts/{accountId}/withdraw":
+    post:
+      summary: Make a withdrawal from an account
+      description: >
+        Allows an authenticated user to withdraw money from the open account.
+        The user must have sufficient funds in their account to complete the withdrawal. 
+        The bank itself is allowed to go into debt as a result of user withdrawals.
+        This endpoint does not check whether the bank has cash on hand. Only user account balance is considered.
+        The accountId must match the authenticated user's own account. 
+        Attempting to deposit into or withdraw from another user's account will result in a 403 Forbidden error.
+      tags:
+        - Accounts
+      security:
+        - UserAuth: []
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: The unique identifier for the account to withdraw from.
+          schema:
+            type: string
+            example: a1b2c3d4-e5f6-7890-1234-567890abcdef
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WithdrawalRequest"
+      responses:
+        "200":
+          description: Withdrawal was successful. Returns the updated account details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BankAccount"
+        "400":
+          description: >
+            Invalid withdrawal amount or insufficient funds. The error message
+            will specify whether the amount is invalid or if the account has insufficient funds.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - authentication token is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the authenticated user does not have permission for
+            this account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Account not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /loans/apply:
+    post:
+      summary: Apply for a loan
+      description: >
+        Allows an authenticated user to apply for a new loan. 
+        The bank will approve the loan only if it has sufficient cash on hand to cover the requested loan amount. 
+        Unlike withdrawals, loans may not put the bank into debt. 
+        If insufficient funds exist, the application will be rejected with a 400 response. 
+        If approved, the loan amount is disbursed to the specified account.
+      tags:
+        - Loans
+      security:
+        - UserAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanApplicationRequest"
+      responses:
+        "201":
+          description: Loan application was processed. Returns the loan details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+        "400":
+          description: Invalid request data or insufficient bank funds for the loan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - authentication token is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the authenticated user does not own the specified
+            account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Account not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  "/loans/{loanId}/pay":
+    post:
+      summary: Make a loan payment
+      description: >
+        Allows an authenticated user to make a payment towards a specific
+        loan. The payment is debited from the user's primary active account.
+      tags:
+        - Loans
+      security:
+        - UserAuth: []
+      parameters:
+        - name: loanId
+          in: path
+          required: true
+          description: The unique identifier for the loan to make a payment on.
+          schema:
+            type: string
+            example: b2c3d4e5-f678-9012-3456-7890abcdef12
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanPaymentRequest"
+      responses:
+        "200":
+          description: Payment was successful. Returns the updated loan details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Loan"
+        "400":
+          description: Invalid payment amount or insufficient funds in the user's account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - authentication token is missing or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - the authenticated user does not own this loan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Loan not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+components:
+  schemas:
+    BankAccount:
+      type: object
+      required:
+        - accountId
+        - balance
+        - status
+      properties:
+        accountId:
+          type: string
+          description: The unique identifier for the new bank account.
+          example: a1b2c3d4-e5f6-7890-1234-567890abcdef
+        balance:
+          type: number
+          format: double
+          description: The current balance of the account.
+          example: 100
+        status:
+          type: string
+          description: The current status of the bank account.
+          enum:
+            - open
+            - closed
+          example: open
+    BankStatus:
+      type: object
+      properties:
+        cashOnHand:
+          type: number
+          format: double
+          description: The total amount of physical cash available.
+          example: 1234567.89
+        currency:
+          type: string
+          description: The currency of the cash on hand.
+          example: USD
+    CloseAccountRequest:
+      type: object
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          description: The action to take for the remaining balance.
+          enum:
+            - withdraw
+            - transfer
+          example: withdraw
+        targetAccountId:
+          type: string
+          description: The account to transfer the balance to, if action is 'transfer'.
+          example: a1b2c3d4-e5f6-7890-1234-567890abcdef
+    CloseAccountResponse:
+      type: object
+      required:
+        - message
+        - closedAccount
+      properties:
+        message:
+          type: string
+          description: A confirmation message for the user.
+          example: Account closed successfully. A check for the remaining balance has been
+            mailed.
+        closedAccount:
+          $ref: "#/components/schemas/BankAccount"
+    DepositRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: number
+          format: double
+          description: The amount of money to deposit.
+          example: 50
+    Loan:
+      type: object
+      required:
+        - loanId
+        - accountId
+        - amount
+        - balance
+        - status
+      properties:
+        loanId:
+          type: string
+          description: The unique identifier for the loan.
+          example: b2c3d4e5-f678-9012-3456-7890abcdef12
+        accountId:
+          type: string
+          description: The ID of the account the loan is associated with.
+          example: a1b2c3d4-e5f6-7890-1234-567890abcdef
+        amount:
+          type: number
+          format: double
+          description: The original amount of the loan.
+          example: 5000
+        balance:
+          type: number
+          format: double
+          description: The current outstanding balance of the loan.
+          example: 4750
+        status:
+          type: string
+          description: The status of the loan.
+          enum:
+            - approved
+            - rejected
+            - paid
+          example: approved
+    LoanApplicationRequest:
+      type: object
+      description: A request to apply for a loan. The system will reject the request
+        if the bank does not have enough cash on hand to cover the requested
+        amount.
+      required:
+        - accountId
+        - amount
+      properties:
+        accountId:
+          type: string
+          description: The ID of the account where the loan funds will be disbursed.
+          example: a1b2c3d4-e5f6-7890-1234-567890abcdef
+        amount:
+          type: number
+          format: double
+          description: The amount of money requested for the loan.
+          example: 5000
+    LoanPaymentRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: number
+          format: double
+          description: The amount of money to pay towards the loan.
+          example: 250
+    NewAccountRequest:
+      type: object
+      description: Request to open a new account. The system will reject the request
+        if the user already has an open account.
+      required:
+        - initialDeposit
+      properties:
+        initialDeposit:
+          type: number
+          format: double
+          description: The initial amount to deposit into the account.
+          example: 100
+    WithdrawalRequest:
+      type: object
+      required:
+        - amount
+      properties:
+        amount:
+          type: number
+          format: double
+          description: The amount of money to withdraw.
+          example: 25
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: A descriptive error message.
+          example: Unauthorized access - invalid token.
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+      description: An API key is required for bank operator authentication.
+    UserAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Bearer token for user authentication. 
+        The authenticated user may only perform actions on accounts and loans they own. 
+        Accessing or modifying another user's resources will result in a 403 Forbidden error.
